@@ -5,17 +5,27 @@ import { useState, useEffect } from "react";
 // import { useSession } from "next-auth/react";
 import { getUsers } from "@/lib/auth";
 
+type UserId = string | number;
+
+type VisibleGiftCardsValue =
+  | number[]
+  | string[]
+  | (number | string)[]
+  | string
+  | null
+  | undefined;
+
 type User = {
-  id: string;
+  id: UserId;
   name: string;
-  email: string | null;
-  phone: string | null;
+  email?: string | null;
+  phone?: string | null;
   role: string;
   status: string;
   createdAt: string;
   orders: number;
   totalSpent: string;
-  visibleGiftCards: string | null;
+  visibleGiftCards?: VisibleGiftCardsValue;
 };
 
 type GiftCard = {
@@ -48,25 +58,40 @@ export default function AdminUsers() {
         return;
       }
 
-      const allUsers = getUsers();
-      
-      // Convert localStorage User format to API User format
-      const formattedUsers: User[] = allUsers.map((u: any) => ({
-        id: u.id.toString(),
-        name: u.name,
-        email: u.email || null,
-        phone: u.phone || null,
-        role: u.role || "user",
-        status: u.status || "active",
-        createdAt: u.createdAt || new Date().toISOString(),
-        orders: u.orders || 0,
-        totalSpent: u.totalSpent || "0",
-        visibleGiftCards: u.visibleGiftCards 
-          ? (Array.isArray(u.visibleGiftCards) 
-              ? JSON.stringify(u.visibleGiftCards) 
-              : u.visibleGiftCards)
-          : null,
-      }));
+      const raw = getUsers() as unknown;
+
+      // Ensure we always work with an array to keep types safe
+      const allUsers: any[] = Array.isArray(raw) ? raw : [];
+
+      // Convert localStorage User format to Admin User format
+      const formattedUsers: User[] = allUsers.map((u: any): User => {
+        const id: UserId =
+          typeof u.id === "number" || typeof u.id === "string"
+            ? u.id
+            : String(u.id ?? "");
+
+        let visibleGiftCards: VisibleGiftCardsValue = undefined;
+        if (u.visibleGiftCards != null) {
+          if (Array.isArray(u.visibleGiftCards)) {
+            visibleGiftCards = u.visibleGiftCards as (number | string)[];
+          } else if (typeof u.visibleGiftCards === "string") {
+            visibleGiftCards = u.visibleGiftCards;
+          }
+        }
+
+        return {
+          id,
+          name: u.name ?? "کاربر بدون نام",
+          email: u.email ?? null,
+          phone: u.phone ?? null,
+          role: u.role || "user",
+          status: u.status || "active",
+          createdAt: u.createdAt || new Date().toISOString(),
+          orders: typeof u.orders === "number" ? u.orders : 0,
+          totalSpent: typeof u.totalSpent === "string" ? u.totalSpent : "0",
+          visibleGiftCards,
+        };
+      });
 
       setUsers(formattedUsers);
       setError("");
@@ -141,23 +166,25 @@ export default function AdminUsers() {
       giftCardsAvailable: giftCards.length,
     });
     
-    // Parse visibleGiftCards - could be array or string
+    // Parse visibleGiftCards - could be array or JSON string
     let currentVisibleCards: number[] = [];
-    if (user.visibleGiftCards) {
-      if (typeof user.visibleGiftCards === 'string') {
-        try {
-          const parsed = JSON.parse(user.visibleGiftCards);
-          currentVisibleCards = Array.isArray(parsed) 
-            ? parsed.map((id: any) => typeof id === 'string' ? parseInt(id, 10) : id)
-            : [];
-        } catch {
-          currentVisibleCards = [];
-        }
-      } else if (Array.isArray(user.visibleGiftCards)) {
-        currentVisibleCards = user.visibleGiftCards.map((id: any) => 
-          typeof id === 'string' ? parseInt(id, 10) : id
+    const rawVisible = user.visibleGiftCards;
+
+    if (typeof rawVisible === "string" && rawVisible.trim() !== "") {
+      try {
+        const parsed = JSON.parse(rawVisible);
+        const cards = Array.isArray(parsed) ? parsed : [];
+        currentVisibleCards = cards.map((id: any) =>
+          typeof id === "string" ? parseInt(id, 10) : Number(id)
         );
+      } catch {
+        currentVisibleCards = [];
       }
+    } else if (Array.isArray(rawVisible)) {
+      const cards = rawVisible as (number | string)[];
+      currentVisibleCards = cards.map((id) =>
+        typeof id === "string" ? parseInt(id, 10) : Number(id)
+      );
     }
     
     // اگر کاربر visibleGiftCards خالی دارد یا ندارد، کارت‌هایی که showByDefault: true هستند (به جز Flow Money) را به صورت پیش‌فرض تیک بزن
