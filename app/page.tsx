@@ -737,4 +737,4 @@ export default function LandingPage() {
     </div>
   );
 }
-// deploy ping
+// Deploy: TypeScript fixes applied - all onClick handlers properly wrapped
