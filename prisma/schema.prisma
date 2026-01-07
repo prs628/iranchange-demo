@@ -1,0 +1,32 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String?   @unique
+  phone         String?
+  passwordHash  String
+  role          String    @default("user") // "user" | "admin"
+  status        String    @default("active") // "active" | "banned"
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Optional fields
+  orders        Int       @default(0)
+  totalSpent    String    @default("0")
+  visibleGiftCards String? // JSON array of gift card IDs
+  
+  @@index([email])
+  @@index([phone])
+}

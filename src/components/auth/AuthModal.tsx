@@ -1,0 +1,413 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useAuth } from "./AuthProvider";
+import { login, register } from "@/lib/auth";
+
+type TabType = "login" | "register";
+
+type AuthModalProps = {
+  isOpen: boolean;
+  onClose: () => void;
+};
+
+export default function AuthModal({
+  isOpen,
+  onClose,
+}: AuthModalProps) {
+  const { closeAuthModal } = useAuth();
+  const [activeTab, setActiveTab] = useState<TabType>("login");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  // Close on Escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("keydown", handleEscape);
+      document.body.style.overflow = "hidden";
+    }
+
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+      document.body.style.overflow = "unset";
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  const handleLoginSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+
+    const formData = new FormData(e.currentTarget);
+    const identifier = formData.get("identifier") as string;
+    const password = formData.get("password") as string;
+
+    if (!identifier || !password) {
+      setError("لطفاً تمام فیلدها را پر کنید");
+      setIsLoading(false);
+      return;
+    }
+
+    if (typeof window === "undefined") {
+      setError("خطا: localStorage در دسترس نیست");
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      // Login user using real function
+      const result = await login(identifier.trim(), password);
+
+      if (!result.success) {
+        setError(result.error || "ایمیل/شماره تلفن یا رمز عبور اشتباه است");
+        setIsLoading(false);
+        return;
+      }
+
+      // Login successful - close modal and refresh
+      closeAuthModal();
+      
+      // Redirect based on role
+      // Admin users should use /admin/login page, not from main site
+      if (result.user?.role === "admin") {
+        // Show message that admin should use admin panel
+        alert("برای دسترسی به پنل ادمین، لطفاً از آدرس /admin/login وارد شوید");
+        window.location.href = "/dashboard";
+      } else {
+        window.location.href = "/dashboard";
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      setError("خطا در ورود. لطفاً دوباره تلاش کنید.");
+      setIsLoading(false);
+    }
+  };
+
+  const handleRegisterSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+
+    const formData = new FormData(e.currentTarget);
+    const name = formData.get("name") as string;
+    const identifier = formData.get("email") as string;
+    const password = formData.get("password") as string;
+    const confirmPassword = formData.get("confirmPassword") as string;
+
+    // Validation
+    if (!name || !identifier || !password || !confirmPassword) {
+      setError("لطفاً تمام فیلدها را پر کنید");
+      setIsLoading(false);
+      return;
+    }
+
+    if (name.trim().length < 2) {
+      setError("نام باید حداقل ۲ کاراکتر باشد");
+      setIsLoading(false);
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("رمز عبور باید حداقل ۶ کاراکتر باشد");
+      setIsLoading(false);
+      return;
+    }
+
+    // Check password match
+    if (password !== confirmPassword) {
+      setError("رمز عبور و تکرار آن مطابقت ندارند");
+      setIsLoading(false);
+      return;
+    }
+
+    if (typeof window === "undefined") {
+      setError("خطا: localStorage در دسترس نیست");
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      // Register user using real function
+      const result = await register(name.trim(), identifier.trim(), password);
+
+      if (!result.success) {
+        setError(result.error || "خطا در ثبت نام");
+        setIsLoading(false);
+        return;
+      }
+
+      // Registration successful - Auto login the user
+      if (result.user && typeof window !== "undefined") {
+        // Set session
+        localStorage.setItem("session_user_id", result.user.id.toString());
+        localStorage.setItem("user_email", result.user.email);
+        localStorage.setItem("user_phone", result.user.phone);
+        localStorage.setItem("user_name", result.user.name);
+        
+        // Notify admin panel
+        window.dispatchEvent(new CustomEvent("usersUpdated"));
+        
+        // Close modal
+        closeAuthModal();
+        
+        // Redirect based on role
+        if (result.user.role === "admin") {
+          window.location.href = "/admin";
+        } else {
+          window.location.href = "/dashboard";
+        }
+      }
+    } catch (err) {
+      console.error("Registration error:", err);
+      setError("خطا در ثبت نام. لطفاً دوباره تلاش کنید.");
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+      {/* Backdrop - clickable to close */}
+      <div
+        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Modal */}
+      <div
+        className="relative z-10 w-full max-w-md glass-card rounded-2xl p-8 shadow-2xl animate-in zoom-in duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute left-4 top-4 w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+          aria-label="بستن"
+        >
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
+
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6 bg-white/5 p-1 rounded-lg">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("login");
+              setError("");
+            }}
+            className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              activeTab === "login"
+                ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            ورود
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab("register");
+              setError("");
+            }}
+            className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              activeTab === "register"
+                ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            ثبت نام
+          </button>
+        </div>
+
+        {/* Login Form */}
+        {activeTab === "login" && (
+          <form onSubmit={handleLoginSubmit} className="space-y-5">
+            <div>
+              <h2 className="text-2xl font-bold text-white mb-2">ورود</h2>
+              <p className="text-sm text-gray-400">
+                به حساب کاربری خود وارد شوید
+              </p>
+            </div>
+
+            {error && (
+              <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-sm text-red-300">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label
+                htmlFor="login-email"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
+                شماره موبایل یا ایمیل
+              </label>
+              <input
+                id="login-email"
+                name="identifier"
+                type="text"
+                required
+                autoComplete="username"
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
+                placeholder="09123456789 یا example@email.com"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="login-password"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
+                رمز عبور
+              </label>
+              <input
+                id="login-password"
+                name="password"
+                type="password"
+                required
+                autoComplete="current-password"
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
+                placeholder="••••••••"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="remember"
+                className="w-4 h-4 rounded bg-white/5 border-white/10 text-blue-500 focus:ring-blue-500/50"
+              />
+              <label htmlFor="remember" className="text-sm text-gray-400">
+                مرا به خاطر بسپار
+              </label>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-medium rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all shadow-lg shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? "در حال ورود..." : "ورود"}
+            </button>
+          </form>
+        )}
+
+        {/* Register Form */}
+        {activeTab === "register" && (
+          <form onSubmit={handleRegisterSubmit} className="space-y-5">
+            <div>
+              <h2 className="text-2xl font-bold text-white mb-2">ثبت نام</h2>
+              <p className="text-sm text-gray-400">
+                حساب کاربری جدید ایجاد کنید
+              </p>
+            </div>
+
+            {error && (
+              <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-sm text-red-300">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label
+                htmlFor="register-name"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
+                نام
+              </label>
+              <input
+                id="register-name"
+                name="name"
+                type="text"
+                required
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
+                placeholder="نام و نام خانوادگی"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="register-email"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
+                شماره موبایل یا ایمیل
+              </label>
+              <input
+                id="register-email"
+                name="email"
+                type="text"
+                required
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
+                placeholder="09123456789 یا example@email.com"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="register-password"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
+                رمز عبور
+              </label>
+              <input
+                id="register-password"
+                name="password"
+                type="password"
+                required
+                minLength={6}
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
+                placeholder="حداقل ۶ کاراکتر"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="register-confirm-password"
+                className="block text-sm font-medium text-gray-300 mb-2"
+              >
+                تکرار رمز عبور
+              </label>
+              <input
+                id="register-confirm-password"
+                name="confirmPassword"
+                type="password"
+                required
+                minLength={6}
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
+                placeholder="رمز عبور را تکرار کنید"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-medium rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all shadow-lg shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? "در حال ثبت نام..." : "ثبت نام"}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
