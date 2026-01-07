@@ -1,12 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 // PHASE 1: NextAuth disabled – use localStorage-based auth instead
 import { register } from "@/lib/auth";
 
 export default function RegisterPage() {
+  // Prevent body scroll when this page is open
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -105,16 +112,16 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 relative flex items-start justify-center p-4" style={{ height: '100vh', overflowY: 'auto' }}>
+    <div className="fixed inset-0 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 z-50 overflow-y-auto">
       {/* Background Pattern */}
-      <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
+      <div className="fixed inset-0 opacity-[0.03] pointer-events-none">
         <div className="absolute inset-0" style={{
           backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`,
           backgroundSize: "40px 40px"
         }} />
       </div>
 
-      <div className="relative z-10 w-full max-w-md my-8">
+      <div className="relative z-10 w-full max-w-md mx-auto my-8 px-4 min-h-full flex items-start justify-center py-8">
         <div className="glass-card rounded-2xl p-6 sm:p-8 shadow-2xl border border-white/10">
           {/* Header */}
           <div className="mb-8 text-center">
